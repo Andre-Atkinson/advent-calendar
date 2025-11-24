@@ -1,0 +1,744 @@
+{
+  "name": "Veeam - Malware Detection & Auto Shutdown",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        -240
+      ],
+      "id": "cf438161-c208-401c-8e6b-2577681cfa11",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://your-veeam-server.yourdomain.com:9419/api/oauth2/token",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-version",
+              "value": "1.3-rev1"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "grant_type",
+              "value": "Password"
+            },
+            {
+              "name": "username",
+              "value": "your-veeam-username"
+            },
+            {
+              "name": "password",
+              "value": ""
+            },
+            {
+              "name": "refresh_token",
+              "value": "string"
+            },
+            {
+              "name": "code",
+              "value": "string"
+            },
+            {
+              "name": "use_short_term_refresh",
+              "value": "true"
+            },
+            {
+              "name": "vbr_token",
+              "value": "string"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        224,
+        -240
+      ],
+      "id": "be57ed2e-d0ac-4dd3-8cb2-00d61b83447f",
+      "name": "Authenticate"
+    },
+    {
+      "parameters": {
+        "url": "https://your-veeam-server.yourdomain.com:9419/api/v1/malwareDetection/events",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "200"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-version",
+              "value": "1.3-rev1"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.access_token }}"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        448,
+        -240
+      ],
+      "id": "9622f4be-8537-42a6-ad48-932741f9ca26",
+      "name": "Get Malware Report"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c6fc5e99-0a91-428e-a409-6b69b7cec72f",
+              "leftValue": "={{ $json.severity }}",
+              "rightValue": "Infected",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "445e0350-8528-433f-afbf-9ece0101cc6e",
+              "leftValue": "={{ $json.severity }}",
+              "rightValue": "Suspicious",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        896,
+        -240
+      ],
+      "id": "aaf78cf7-7aaf-4576-ab11-43851caa3bb8",
+      "name": "Filter Events"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "923988ed-dcf8-4d9c-b487-1b6195e7bed8",
+              "leftValue": "={{ $json.detectionTimeUtc }}",
+              "rightValue": "={{ new Date(Date.now() - 5 * 60 * 1000).toISOString() }}",
+              "operator": {
+                "type": "dateTime",
+                "operation": "after"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        -240
+      ],
+      "id": "aabfb94d-64e7-4a8a-8fe9-c9f8c1136334",
+      "name": "Filter"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        672,
+        -240
+      ],
+      "id": "21896872-969a-4136-974f-7c4cbf985b62",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#n8n",
+          "mode": "name"
+        },
+        "text": "=⚠️ Veeam Malware Detection Alert  Machine: {{ $json.machine.displayName }} Detected: {{ $json.detectionTimeUtc }} Severity: {{ $json.severity }}\n\nVM will be powered down and a full backup taken",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        1344,
+        -240
+      ],
+      "id": "3131eb62-701b-41c8-8ec9-e7a2fccf04cd",
+      "name": "Send a message",
+      "webhookId": "your-slack-webhook-id",
+      "credentials": {
+        "slackApi": {
+          "id": "your-slack-credential-id",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Shutdown VM",
+        "height": 240,
+        "width": 1024
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1216,
+        -320
+      ],
+      "typeVersion": 1,
+      "id": "2a05d179-4b79-4f4b-9012-e4aa3644c102",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://your-vcenter-server.yourdomain.com/api/session",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1568,
+        -240
+      ],
+      "id": "8fb38acf-8e69-4648-ad5b-a1401da2cc47",
+      "name": "Auth vCenter",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "your-vcenter-basic-auth-id",
+          "name": "vCenter API"
+        },
+        "httpHeaderAuth": {
+          "id": "your-vcenter-header-auth-id",
+          "name": "vCenter Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://your-vcenter-server.yourdomain.com/api/vcenter/vm",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "names",
+              "value": "={{ $('Filter').item.json.machine.displayName }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "vmware-api-session-id",
+              "value": "={{ $json.headers['vmware-api-session-id'] }}"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1792,
+        -240
+      ],
+      "id": "1fc1ed92-4456-4469-861b-af93488a2793",
+      "name": "Get VM By Name"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://your-vcenter-server.yourdomain.com/api/vcenter/vm/{{ $json.vm }}/power",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "action",
+              "value": "stop"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "vmware-api-session-id",
+              "value": "={{ $('Auth vCenter').item.json.headers['vmware-api-session-id'] }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2240,
+        -336
+      ],
+      "id": "5d96707d-944f-46e3-94f6-96551b64b099",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -560
+      ],
+      "id": "a6998af4-b444-4c3b-820a-2106035d3d41",
+      "name": "When clicking 'Execute workflow'"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://your-veeam-server.yourdomain.com:9419/api/oauth2/token",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-version",
+              "value": "1.3-rev1"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "grant_type",
+              "value": "Password"
+            },
+            {
+              "name": "username",
+              "value": "your-veeam-username"
+            },
+            {
+              "name": "password",
+              "value": ""
+            },
+            {
+              "name": "refresh_token",
+              "value": "string"
+            },
+            {
+              "name": "code",
+              "value": "string"
+            },
+            {
+              "name": "use_short_term_refresh",
+              "value": "true"
+            },
+            {
+              "name": "vbr_token",
+              "value": "string"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        224,
+        -560
+      ],
+      "id": "d2439038-7dc0-46b4-aa11-49e29708e872",
+      "name": "Authenticate1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://your-veeam-server.yourdomain.com:9419/api/v1/malwareDetection/events",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-version",
+              "value": "1.3-rev1"
+            },
+            {
+              "name": "Authorization",
+              "value": "=bearer {{ $json.access_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"detectionTimeUtc\": \"{{ new Date().toISOString() }}\",\n  \"machine\": {\n    \"fqdn\": \"test-vm.yourdomain.com\",\n    \"ipv4\": \"10.0.0.100\",\n    \"ipv6\": \"\",\n    \"uuid\": \"your-vm-uuid-here\",\n    \"backupObjectId\": \"your-backup-object-id-here\",\n    \"restorePointId\": \"00000000-0000-0000-0000-000000000000\"\n  },\n  \"details\": \"Testing\",\n  \"engine\": \"\",\n  \"severity\": \"Infected\"\n}\n",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        448,
+        -560
+      ],
+      "id": "37d5cdfd-2ed1-4fab-90dd-f1d53ebd9833",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "38cf3c9d-793e-44fa-84a2-d4dc41e46d6f",
+              "leftValue": "={{ $json.power_state }}",
+              "rightValue": "POWERED_ON",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2016,
+        -240
+      ],
+      "id": "bfeed84b-d116-4d3a-9a88-e5408e9fe9fa",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#n8n",
+          "mode": "name"
+        },
+        "text": "=VM {{ $('Get VM By Name').item.json.name }} is in a {{ $json.power_state }} state, Skipping PowerDown steps.",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        2240,
+        -144
+      ],
+      "id": "be23a191-9843-4bc6-ba19-c27e7c9884df",
+      "name": "Send a message1",
+      "webhookId": "your-slack-webhook-id",
+      "credentials": {
+        "slackApi": {
+          "id": "your-slack-credential-id",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#n8n",
+          "mode": "name"
+        },
+        "text": "=VM {{ $('If').item.json.name }} has been powered off successfully",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        2464,
+        -336
+      ],
+      "id": "836d70de-70bc-4f20-86ab-32d3b8a03ddf",
+      "name": "Send a message2",
+      "webhookId": "your-slack-webhook-id",
+      "credentials": {
+        "slackApi": {
+          "id": "your-slack-credential-id",
+          "name": "Slack account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Authenticate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Authenticate": {
+      "main": [
+        [
+          {
+            "node": "Get Malware Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Malware Report": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Events": {
+      "main": [
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Filter Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Auth vCenter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auth vCenter": {
+      "main": [
+        [
+          {
+            "node": "Get VM By Name",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get VM By Name": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Authenticate1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Authenticate1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Send a message2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "09bca72e-3857-4986-ae8a-4d1085049c47",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "your-n8n-instance-id-here"
+  },
+  "id": "your-workflow-id",
+  "tags": []
+}
